@@ -135,9 +135,11 @@ def collect_data(sourcepath, target_dir = './dataset'):
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Activation, LSTM, GRU, Dropout, SimpleRNN
+from keras.callbacks import TensorBoard
 import numpy as np
 import time
 from datetime import timedelta
+import datetime
 import numpy.random as nr
 import pandas as pd
 from os import listdir
@@ -256,18 +258,25 @@ def get_label(key):
 timesteps = 50
 num_classes = 2
 batch_size = 50
-hidden_size = 512
+hidden_size8 = 8
+hidden_size64 = 64
+hidden_size128 = 128
+hidden_size256 = 256
+hidden_size512 = 512
+
+hidden_size = hidden_size128
 data_dim = 1
-epochs = 30
+epochs = 20
 
 # =============================================================================
 # Model
 # =============================================================================
 
 model = Sequential()
-model.add(GRU(hidden_size, return_sequences=True, stateful=True,
+model.add(GRU(hidden_size64, return_sequences=True, stateful=True,
                batch_input_shape=(batch_size, timesteps, data_dim)))
-model.add(GRU(hidden_size, return_sequences=True, stateful=True))
+model.add(GRU(hidden_size128, return_sequences=True, stateful=True))
+#model.add(GRU(hidden_size256, return_sequences=True, stateful=True))
 model.add(Dense(num_classes, activation='softmax'))
 
 model.compile(loss='categorical_crossentropy',
@@ -343,8 +352,12 @@ def get_labels2(some_data):
         datata.extend([k['data'] for k in fdata])
         labels.extend([k['label'] for k in fdata])
 
-    print('Collected {} data and {} labels.'.format(len(datata), len(labels)))
-    return datata, labels
+    shuffled_index = np.random.choice(range(len(datata)), size=len(datata), replace=False)
+    datatax = [datata[i] for i in shuffled_index]
+    labelsx = [labels[i] for i in shuffled_index]
+
+    print('Collected {} data and {} labels.'.format(len(datatax), len(labelsx)))
+    return datatax, labelsx
 
 # Collect data vs. labels *OBSOLETE*
 @elapsed
@@ -445,17 +458,30 @@ validate_y = np.array([v.reshape(v.shape[0],2) for v in validate_y[:v_size]], dt
 ts_size = len(test_x)//batch_size * batch_size
 test_x = np.array([s.reshape(s.shape[0],1) for s in test_x[:ts_size]], dtype=np.float32)
 test_y = np.array([s.reshape(s.shape[0],2) for s in test_y[:ts_size]], dtype=np.float32)
+
+
+# =============================================================================
+# Tensorboard - Ref: http://fizzylogic.nl/2017/05/08/monitor-progress-of-your-keras-based-neural-network-using-tensorboard/
+# =============================================================================
+tensorboard = TensorBoard(log_dir="logs/{}".format(datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")))
 # =============================================================================
 # Train!
 # =============================================================================
 model.fit(train_x, train_y,
           batch_size=batch_size, epochs=epochs, shuffle=True,
-          validation_data=(validate_x, validate_y))
+          validation_data=(validate_x, validate_y), callbacks=[tensorboard])
 
 # =============================================================================
 # Test!
 # =============================================================================
-predictions = model.predict_on_batch(test_x[:100])
+#predictions = model.predict_on_batch(test_x[:batch_size]) # old
+# Shuffle test data
+test_shuffle = np.random.choice(range(len(test_x)), size=batch_size, replace=False)
+test_x_shuffled = np.array([test_x[i] for i in test_shuffle], dtype=np.float32)
+test_y_shuffled = np.array([test_y[i] for i in test_shuffle], dtype=np.float32)
+
+predictions = model.predict_on_batch(test_x_shuffled)
+
 
 gt = get_target_index
 print("sample\tactual\t\tpredicted\t\t\tprediction error (over correct class)")
@@ -466,7 +492,7 @@ false_negative = 0
 
 for k in range(len(predictions)):
     p = predictions[k]
-    actual = gt(test_y[k][-1])
+    actual = gt(test_y_shuffled[k][-1])
     
     error = calculate_error(actual, p[-1])
     if error > 0.4:
@@ -487,3 +513,9 @@ print("================\n")
 print("\tP\tN")
 print("P\t{}\t{}".format(true_positive, false_negative))
 print("N\t{}\t{}".format(false_positive, true_negative))
+
+precision = true_positive / (true_positive + false_positive)
+recall = true_positive / (true_positive + false_negative)
+
+print("Precision: {}".format(precision))
+print("Recall: {}".format(recall))
