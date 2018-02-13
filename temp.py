@@ -188,17 +188,21 @@ def get_data_plot(path='./dataset', limit=None, drange=None, min_length=100, off
         ff = filefiles[drange[0]:drange[1]]
 
 
+    old_label = None
     for filename in ff:
         filepath = '{}/{}'.format(path, filename)
         adata = pd.read_csv(filepath)
+
+        fname = filename.replace('.csv','')
         if len(adata) < min_length:
-            print("Skipping: {} len: {} < {}".format(filename, len(adata), min_length))
+            print("Skipping: {} len: {} < {}".format(fname, len(adata), min_length))
             continue
         walks = walk(adata.values, offset=offset)
         
         for i in range(len(walks)):
             a_walk = walks[i]               
-            label = "{}_{}".format(filename[:15], i)
+            label = "{}_{}".format(fname, i)
+
             
             # Check for array with static values
             if list(a_walk).count(a_walk[0]) == len(list(a_walk)):
@@ -206,8 +210,12 @@ def get_data_plot(path='./dataset', limit=None, drange=None, min_length=100, off
                 continue       
             
             fubar.append(a_walk)  
-            zup = pd.DataFrame(data=a_walk, columns=[label])            
+#            zup = pd.DataFrame(data=a_walk, columns=[label]) 
             fu_cols.append(label)
+            if old_label != label:
+                old_label = label
+            else:
+                raise ValueError("old label == new label!")
             # zup.plot()          
         
     #return fubar, fu_cols
@@ -235,12 +243,19 @@ def calculate_error(actual, prediction):
 def prediction_confidence(actual, prediction):
     return prediction[int(actual)]
 
+def get_label(key):
+    if any([k in key for k in ['HEAD_PAN', 'HEAD_TILT', 'L_ELBOW',
+                               'L_SHO_PITCH', 'L_SHO_ROLL', 'R_ELBOW',
+                               'R_SHO_PITCH', 'R_SHO_ROLL']]):
+        return 1.0
+    return 0.0
+
 # =============================================================================
 # Parameters
 # =============================================================================
 timesteps = 50
 num_classes = 2
-batch_size = 100
+batch_size = 50
 hidden_size = 512
 data_dim = 1
 epochs = 30
@@ -263,6 +278,7 @@ model.compile(loss='categorical_crossentropy',
 # Collect some data
 # =============================================================================
 all_data = get_data()
+all_data = get_data_plot(offset=20)
 
 train_data = []
 validation_data = []
@@ -271,19 +287,66 @@ test_data = []
 # Set ratio of train, validation, and test data
 r_train, r_validation, r_test = 0.8, 0.1, 0.1
 
-n_train = int(r_train * all_data.size)
-n_validation = int(r_validation * all_data.size)
-n_test = int(r_test * all_data.size)
+tot_size = len(all_data.columns)
 
-#randomized_index = np.random.choice(range(len(all_data)), size=len(all_data), replace=False)
-randomized_index = np.random.choice(range(len(all_data)), size=5, replace=False)
-randomized_data = pd.DataFrame(data=[all_data[0][i] for i in randomized_index])
+n_train = int(r_train * tot_size)
+n_validation = int(r_validation * tot_size)
+n_test = int(r_test * tot_size)
 
-train_data = randomized_data[0][:n_train]
-validation_data = randomized_data[0][n_train:n_train+n_validation]
-test_data = randomized_data[0][n_train+n_validation:]
+randomized_index = np.random.choice(all_data.columns, size=len(all_data.columns), replace=False)
+#randomized_index = np.random.choice(range(len(all_data)), size=5, replace=False)
+randomed_data = np.array([all_data[col].values for col in randomized_index]).T
+randomized_data = pd.DataFrame(data=randomed_data, columns=randomized_index)
 
-# Collect data vs. labels
+train_cols = randomized_index[:n_train]
+train_data = pd.DataFrame(data=np.array([randomized_data[col].values for col in train_cols]).T, columns=train_cols)
+val_cols = randomized_index[n_train:n_train+n_validation]
+validation_data =pd.DataFrame(data=np.array([randomized_data[col].values for col in val_cols]).T, columns=val_cols)
+test_cols = randomized_index[n_train+n_validation:]
+test_data = pd.DataFrame(data=np.array([randomized_data[col].values for col in test_cols]).T, columns=test_cols)
+
+@elapsed
+def get_labels2(some_data):
+    class0 = 0
+    class1 = 0
+    datata0 = []
+    datata1 = []
+    datata= []
+    labels = []
+    le_bin = None
+
+    for col in some_data.columns:
+        thedata = some_data[col].values
+        l = len(thedata)
+        lab = get_label(col) # Get label based on column/filename
+
+        if lab == 0.0:
+            le_bin = datata0
+            class0 += 1
+        else:
+            le_bin = datata1
+            class1 += 1
+
+        # label is two-vector (softmax)
+        lablab = [lab, 1 - lab]
+        tmp_lab = np.array([lablab for i in range(l)])
+
+        le_bin.append({'data': thedata, 
+                 'label': tmp_lab})
+
+    dat_dat = min(class0, class1)
+#    print("class0x1: {} x {}".format(class0, class1))
+#    print("class0: {}".format(datata0))
+#    print("class1: {}".format(datata1))
+    for fdata in [datata0, datata1]:
+        pick = np.random.choice(fdata, size=dat_dat, replace=False)
+        datata.extend([k['data'] for k in fdata])
+        labels.extend([k['label'] for k in fdata])
+
+    print('Collected {} data and {} labels.'.format(len(datata), len(labels)))
+    return datata, labels
+
+# Collect data vs. labels *OBSOLETE*
 @elapsed
 def get_labels(some_data):
     datata = []
@@ -364,20 +427,24 @@ def get_labels(some_data):
     print('Collected {} data and {} labels. Skipped {}.'.format(len(datata), len(labels), len(skipped)))
     return datata, labels, skipped
 
-train_x, train_y, train_skipped = get_labels(train_data)
-validate_x, validate_y, validate_skipped = get_labels(validation_data)
-test_x, test_y, test_skipped = get_labels(test_data)
+#train_x, train_y, train_skipped = get_labels(train_data)
+#validate_x, validate_y, validate_skipped = get_labels(validation_data)
+#test_x, test_y, test_skipped = get_labels(test_data)
+
+train_x, train_y = get_labels2(train_data)
+validate_x, validate_y = get_labels2(validation_data)
+test_x, test_y = get_labels2(test_data)
 
 # Just get batch-divisable data, and convert to numpy arrays
 t_size = len(train_x)//batch_size * batch_size
-train_x = np.array(train_x[:t_size], dtype=np.float32)
-train_y = np.array(train_y[:t_size], dtype=np.float32)
+train_x = np.array([t.reshape(t.shape[0],1) for t in train_x[:t_size]], dtype=np.float32)
+train_y = np.array([t.reshape(t.shape[0],2) for t in train_y[:t_size]], dtype=np.float32)
 v_size = len(validate_x)//batch_size * batch_size
-validate_x = np.array(validate_x[:v_size], dtype=np.float32)
-validate_y = np.array(validate_y[:v_size], dtype=np.float32)
+validate_x = np.array([v.reshape(v.shape[0],1) for v in validate_x[:v_size]], dtype=np.float32)
+validate_y = np.array([v.reshape(v.shape[0],2) for v in validate_y[:v_size]], dtype=np.float32)
 ts_size = len(test_x)//batch_size * batch_size
-test_x = np.array(test_x[:ts_size], dtype=np.float32)
-test_y = np.array(test_y[:ts_size], dtype=np.float32)
+test_x = np.array([s.reshape(s.shape[0],1) for s in test_x[:ts_size]], dtype=np.float32)
+test_y = np.array([s.reshape(s.shape[0],2) for s in test_y[:ts_size]], dtype=np.float32)
 # =============================================================================
 # Train!
 # =============================================================================
