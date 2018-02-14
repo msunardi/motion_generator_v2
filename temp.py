@@ -229,7 +229,7 @@ def get_data_plot(path='./dataset', limit=None, drange=None, min_length=100, off
 
 def walk(data, steps=50, offset=5):
     rr = []
-    for i in range(len(data)):
+    for i in range(len(data)-1):
         tmp = data[i*offset:i*offset+steps]
         if len(tmp) < steps:
             break
@@ -252,6 +252,43 @@ def get_label(key):
         return 1.0
     return 0.0
 
+@elapsed
+def shuffle(data, labels, size=None):
+    # Check data and labels are the same size
+    assert len(data) == len(labels)
+    if not size:
+        size = len(data)
+    idx = np.random.choice(range(len(data)), size=size, replace=False)
+    datax = np.array([data[i] for i in idx], dtype=np.float32)
+    labelsx = np.array([labels[i] for i in idx], dtype=np.float32)
+    print("Shuffled: {} data and {} labels".format(len(datax), len(labelsx)))
+    return datax, labelsx
+
+# Plot by first converting to pd.DataFrames
+# Example: pdplot_data(test_x_shuffled, [(42,1), (0,1), (2,0), (3,1), (4,0)])
+# (42,1) = test_x_shuffled[42], class=1
+def pdplot_data(data, labels=None, samples=[], figsize=()):
+    # samples should be list of tuples: (index, class)
+    if len(labels) > 0:
+        np_toplot = np.array([data[i].T[0] for i in samples])
+        pd_labels = [get_target_index(train_y[i][0]) for i in samples]
+        pd_sample_label = [z for z in zip(samples, pd_labels)]
+        pd_toplot = pd.DataFrame(data=np_toplot.T, columns=["{} ({})".format(s[0],s[1]) for s in pd_sample_label])
+    elif all([type(s)==tuple for s in samples]):
+        np_toplot = np.array([data[i[0]].T[0] for i in samples])
+        pd_toplot = pd.DataFrame(data=np_toplot.T, columns=["{} ({})".format(s[0],s[1]) for s in samples])
+    else:
+        np_toplot = np.array([data[i].T[0] for i in samples])
+        pd_toplot = pd.DataFrame(data=np_toplot.T, columns=samples)
+    if bool(figsize):
+        pd_toplot.plot(figsize=figsize)
+    else:
+        pd_toplot.plot()
+
+# Stupid boring plot from numpy array (data), and index (sample)
+def plot_from_test(data, sample):
+    plt.plot(data[sample].T[0])      
+
 # =============================================================================
 # Parameters
 # =============================================================================
@@ -271,7 +308,7 @@ epochs = 20
 # =============================================================================
 # Model
 # =============================================================================
-
+model = None
 model = Sequential()
 model.add(GRU(hidden_size64, return_sequences=True, stateful=True,
                batch_input_shape=(batch_size, timesteps, data_dim)))
@@ -286,8 +323,8 @@ model.compile(loss='categorical_crossentropy',
 # =============================================================================
 # Collect some data
 # =============================================================================
-all_data = get_data()
-all_data = get_data_plot(offset=20)
+#all_data = get_data()
+all_data = get_data_plot(offset=10)
 
 train_data = []
 validation_data = []
@@ -359,45 +396,55 @@ def get_labels2(some_data):
     print('Collected {} data and {} labels.'.format(len(datatax), len(labelsx)))
     return datatax, labelsx
 
-# Collect data vs. labels *OBSOLETE*
-@elapsed
-def get_labels(some_data):
-    datata = []
-    
-    # Bins to collect data of the two classes; used to balance the dataset
-    datata0 = []
-    datata1 = []    
-    le_bin = None
-    class0 = 0
-    class1 = 0
-    labels = []
-    skipped = []
-    for d in some_data:
-        l = len(d)
-        lab = d['0'].values[-1]
-        if lab not in [0.0, 1.0] or l < timesteps:
-            skipped.append(d['0'])
-            continue
-        if lab == 0.0:
-            le_bin = datata0
-            class0 += 1
-        else:
-            le_bin = datata1
-            class1 += 1
-            
-        val = d['0'].values
-        # last working version
-#        lablab = []
-#        start = i * timesteps
-#        end = start + timesteps
-#        for x in range(timesteps):
-#            lablab.append([lab, 1 - lab])
-##        print(lablab)
-#        lablab = np.array(lablab, dtype=np.float32)
-#        datata.append(np.array(val[:timesteps], dtype=np.float32).reshape(timesteps,1))
-#        labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
-        
-        # See how many chunks of size <timesteps> can be extracted from each data (working)
+## Collect data vs. labels *OBSOLETE*
+#@elapsed
+#def get_labels(some_data):
+#    datata = []
+#    
+#    # Bins to collect data of the two classes; used to balance the dataset
+#    datata0 = []
+#    datata1 = []    
+#    le_bin = None
+#    class0 = 0
+#    class1 = 0
+#    labels = []
+#    skipped = []
+#    for d in some_data:
+#        l = len(d)
+#        lab = d['0'].values[-1]
+#        if lab not in [0.0, 1.0] or l < timesteps:
+#            skipped.append(d['0'])
+#            continue
+#        if lab == 0.0:
+#            le_bin = datata0
+#            class0 += 1
+#        else:
+#            le_bin = datata1
+#            class1 += 1
+#            
+#        val = d['0'].values
+#        # last working version
+##        lablab = []
+##        start = i * timesteps
+##        end = start + timesteps
+##        for x in range(timesteps):
+##            lablab.append([lab, 1 - lab])
+###        print(lablab)
+##        lablab = np.array(lablab, dtype=np.float32)
+##        datata.append(np.array(val[:timesteps], dtype=np.float32).reshape(timesteps,1))
+##        labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
+#        
+#        # See how many chunks of size <timesteps> can be extracted from each data (working)
+##        for i in range(len(val)//timesteps):
+##            lablab = []
+##            start = i * timesteps
+##            end = start + timesteps
+##            for x in range(timesteps):
+##                lablab.append([lab, 1 - lab])
+##                
+##            lablab = np.array(lablab, dtype=np.float32)
+##            datata.append(np.array(val[start:end], dtype=np.float32).reshape(timesteps,1))
+##            labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
 #        for i in range(len(val)//timesteps):
 #            lablab = []
 #            start = i * timesteps
@@ -406,40 +453,34 @@ def get_labels(some_data):
 #                lablab.append([lab, 1 - lab])
 #                
 #            lablab = np.array(lablab, dtype=np.float32)
-#            datata.append(np.array(val[start:end], dtype=np.float32).reshape(timesteps,1))
-#            labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
-        for i in range(len(val)//timesteps):
-            lablab = []
-            start = i * timesteps
-            end = start + timesteps
-            for x in range(timesteps):
-                lablab.append([lab, 1 - lab])
-                
-            lablab = np.array(lablab, dtype=np.float32)
-            data_to_store = np.array(val[start:end], dtype=np.float32).reshape(timesteps,1)
-            label_to_store = np.array(lablab, dtype=np.float32).reshape(timesteps,2)
-            le_bin.append({'data': data_to_store, 
-                 'label': label_to_store})
-    
-    # Now pick the data so the number of data points for each class is balanced
-    dat_dat = min(class0, class1)
-    for fdata in [datata0, datata1]:
-        pick = np.random.choice(range(dat_dat), size=dat_dat, replace=False)
-        datata.extend([k['data'] for k in fdata])
-        labels.extend([k['label'] for k in fdata])
-    # Shuffle the data
-    total_data = 0
-    if len(datata) == len(labels):
-        total_data = len(datata)
-        shuffle = np.random.choice(range(total_data), size=total_data, replace=False)
-        datata = [datata[i] for i in shuffle]
-        labels = [labels[i] for i in shuffle]
-    else:
-        raise ValueError('datata =/= labels')
-    
-    print('Collected {} data and {} labels. Skipped {}.'.format(len(datata), len(labels), len(skipped)))
-    return datata, labels, skipped
+#            data_to_store = np.array(val[start:end], dtype=np.float32).reshape(timesteps,1)
+#            label_to_store = np.array(lablab, dtype=np.float32).reshape(timesteps,2)
+#            le_bin.append({'data': data_to_store, 
+#                 'label': label_to_store})
+#    
+#    # Now pick the data so the number of data points for each class is balanced
+#    dat_dat = min(class0, class1)
+#    for fdata in [datata0, datata1]:
+#        pick = np.random.choice(range(dat_dat), size=dat_dat, replace=False)
+#        datata.extend([k['data'] for k in fdata])
+#        labels.extend([k['label'] for k in fdata])
+#    # Shuffle the data
+#    total_data = 0
+#    if len(datata) == len(labels):
+#        total_data = len(datata)
+#        shuffle = np.random.choice(range(total_data), size=total_data, replace=False)
+#        datata = [datata[i] for i in shuffle]
+#        labels = [labels[i] for i in shuffle]
+#    else:
+#        raise ValueError('datata =/= labels')
+#    
+#    print('Collected {} data and {} labels. Skipped {}.'.format(len(datata), len(labels), len(skipped)))
+#    return datata, labels, skipped
 
+
+# =============================================================================
+# Split to train, validation, and test data
+# =============================================================================
 #train_x, train_y, train_skipped = get_labels(train_data)
 #validate_x, validate_y, validate_skipped = get_labels(validation_data)
 #test_x, test_y, test_skipped = get_labels(test_data)
@@ -459,6 +500,8 @@ ts_size = len(test_x)//batch_size * batch_size
 test_x = np.array([s.reshape(s.shape[0],1) for s in test_x[:ts_size]], dtype=np.float32)
 test_y = np.array([s.reshape(s.shape[0],2) for s in test_y[:ts_size]], dtype=np.float32)
 
+train_x, train_y = shuffle(train_x, train_y, size=t_size)
+validate_x, validate_y = shuffle(validate_x, validate_y, size=v_size)
 
 # =============================================================================
 # Tensorboard - Ref: http://fizzylogic.nl/2017/05/08/monitor-progress-of-your-keras-based-neural-network-using-tensorboard/
@@ -467,6 +510,7 @@ tensorboard = TensorBoard(log_dir="logs/{}".format(datetime.datetime.utcnow().st
 # =============================================================================
 # Train!
 # =============================================================================
+print(model.summary())
 model.fit(train_x, train_y,
           batch_size=batch_size, epochs=epochs, shuffle=True,
           validation_data=(validate_x, validate_y), callbacks=[tensorboard])
