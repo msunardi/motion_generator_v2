@@ -253,25 +253,81 @@ def get_label(key):
     return 0.0
 
 @elapsed
-def shuffle(data, labels, size=None):
+def get_labels2(some_data):
+    class0 = 0
+    class1 = 0
+    datata0 = []
+    datata1 = []
+    datata= []
+    labels = []
+    samples = []
+    le_bin = None
+
+    for col in some_data.columns:
+        thedata = some_data[col].values
+        l = len(thedata)
+        lab = get_label(col) # Get label based on column/filename
+        
+        print("{} labeled: {}".format(col, lab))
+        if lab == 0.0:
+            le_bin = datata0
+            class0 += 1
+        else:
+            le_bin = datata1
+            class1 += 1
+
+        # label is two-vector (softmax)
+        lablab = [lab, 1 - lab]
+        tmp_lab = np.array([lablab for i in range(l)])
+
+        le_bin.append({'data': thedata, 
+                 'label': tmp_lab,
+                 'sample': col})
+
+    dat_dat = min(class0, class1)
+#    print("class0x1: {} x {}".format(class0, class1))
+#    print("class0: {}".format(datata0))
+#    print("class1: {}".format(datata1))
+    for fdata in [datata0, datata1]:
+        if len(fdata) > 0:
+            pick = np.random.choice(fdata, size=dat_dat, replace=False)
+            datata.extend([k['data'] for k in pick])
+            labels.extend([k['label'] for k in pick])
+            samples.extend([k['sample'] for k in pick])
+
+    shuffled_index = np.random.choice(range(len(datata)), size=len(datata), replace=False)
+    datatax = [datata[i] for i in shuffled_index]
+    labelsx = [labels[i] for i in shuffled_index]
+    samplesx = [samples[i] for i in shuffled_index]
+
+    print('Collected {} data and {} labels.'.format(len(datatax), len(labelsx)))
+    return datatax, labelsx, samplesx
+
+@elapsed
+def shuffle(data, labels, samples=None, size=None):
     # Check data and labels are the same size
     assert len(data) == len(labels)
     if not size:
         size = len(data)
     idx = np.random.choice(range(len(data)), size=size, replace=False)
-    datax = np.array([data[i] for i in idx], dtype=np.float32)
+    print("Shuffle: {}".format(idx))
+    datax = np.array([data[i].reshape(timesteps,1) for i in idx], dtype=np.float32)
     labelsx = np.array([labels[i] for i in idx], dtype=np.float32)
     print("Shuffled: {} data and {} labels".format(len(datax), len(labelsx)))
+    if samples:
+        samplesx = [samples[i] for i in idx]
+        return datax, labelsx, samplesx
     return datax, labelsx
+
 
 # Plot by first converting to pd.DataFrames
 # Example: pdplot_data(test_x_shuffled, [(42,1), (0,1), (2,0), (3,1), (4,0)])
 # (42,1) = test_x_shuffled[42], class=1
-def pdplot_data(data, labels=None, samples=[], figsize=()):
+def pdplot_data(data, labels=None, samples=[], sample_names=[], figsize=()):
     # samples should be list of tuples: (index, class)
     if len(labels) > 0:
         np_toplot = np.array([data[i].T[0] for i in samples])
-        pd_labels = [get_target_index(train_y[i][0]) for i in samples]
+        pd_labels = [get_target_index(labels[i][0]) for i in samples]
         pd_sample_label = [z for z in zip(samples, pd_labels)]
         pd_toplot = pd.DataFrame(data=np_toplot.T, columns=["{} ({})".format(s[0],s[1]) for s in pd_sample_label])
     elif all([type(s)==tuple for s in samples]):
@@ -284,10 +340,17 @@ def pdplot_data(data, labels=None, samples=[], figsize=()):
         pd_toplot.plot(figsize=figsize)
     else:
         pd_toplot.plot()
+    if len(sample_names) > 0:
+        for i in samples:
+            print('{} - {}'.format(i, sample_names[i]))
 
 # Stupid boring plot from numpy array (data), and index (sample)
 def plot_from_test(data, sample):
-    plt.plot(data[sample].T[0])      
+    plt.plot(data[sample].T[0])  
+
+def verify(labels, samples, n=20):
+    for i in range(n):
+        print('{}: {}'.format(samples[i], labels[i][0]))    
 
 # =============================================================================
 # Parameters
@@ -303,7 +366,7 @@ hidden_size512 = 512
 
 hidden_size = hidden_size128
 data_dim = 1
-epochs = 20
+epochs = 10
 
 # =============================================================================
 # Model
@@ -313,7 +376,7 @@ model = Sequential()
 model.add(GRU(hidden_size64, return_sequences=True, stateful=True,
                batch_input_shape=(batch_size, timesteps, data_dim)))
 model.add(GRU(hidden_size128, return_sequences=True, stateful=True))
-#model.add(GRU(hidden_size256, return_sequences=True, stateful=True))
+model.add(GRU(hidden_size256, return_sequences=True, stateful=True))
 model.add(Dense(num_classes, activation='softmax'))
 
 model.compile(loss='categorical_crossentropy',
@@ -351,132 +414,6 @@ validation_data =pd.DataFrame(data=np.array([randomized_data[col].values for col
 test_cols = randomized_index[n_train+n_validation:]
 test_data = pd.DataFrame(data=np.array([randomized_data[col].values for col in test_cols]).T, columns=test_cols)
 
-@elapsed
-def get_labels2(some_data):
-    class0 = 0
-    class1 = 0
-    datata0 = []
-    datata1 = []
-    datata= []
-    labels = []
-    le_bin = None
-
-    for col in some_data.columns:
-        thedata = some_data[col].values
-        l = len(thedata)
-        lab = get_label(col) # Get label based on column/filename
-
-        if lab == 0.0:
-            le_bin = datata0
-            class0 += 1
-        else:
-            le_bin = datata1
-            class1 += 1
-
-        # label is two-vector (softmax)
-        lablab = [lab, 1 - lab]
-        tmp_lab = np.array([lablab for i in range(l)])
-
-        le_bin.append({'data': thedata, 
-                 'label': tmp_lab})
-
-    dat_dat = min(class0, class1)
-#    print("class0x1: {} x {}".format(class0, class1))
-#    print("class0: {}".format(datata0))
-#    print("class1: {}".format(datata1))
-    for fdata in [datata0, datata1]:
-        pick = np.random.choice(fdata, size=dat_dat, replace=False)
-        datata.extend([k['data'] for k in fdata])
-        labels.extend([k['label'] for k in fdata])
-
-    shuffled_index = np.random.choice(range(len(datata)), size=len(datata), replace=False)
-    datatax = [datata[i] for i in shuffled_index]
-    labelsx = [labels[i] for i in shuffled_index]
-
-    print('Collected {} data and {} labels.'.format(len(datatax), len(labelsx)))
-    return datatax, labelsx
-
-## Collect data vs. labels *OBSOLETE*
-#@elapsed
-#def get_labels(some_data):
-#    datata = []
-#    
-#    # Bins to collect data of the two classes; used to balance the dataset
-#    datata0 = []
-#    datata1 = []    
-#    le_bin = None
-#    class0 = 0
-#    class1 = 0
-#    labels = []
-#    skipped = []
-#    for d in some_data:
-#        l = len(d)
-#        lab = d['0'].values[-1]
-#        if lab not in [0.0, 1.0] or l < timesteps:
-#            skipped.append(d['0'])
-#            continue
-#        if lab == 0.0:
-#            le_bin = datata0
-#            class0 += 1
-#        else:
-#            le_bin = datata1
-#            class1 += 1
-#            
-#        val = d['0'].values
-#        # last working version
-##        lablab = []
-##        start = i * timesteps
-##        end = start + timesteps
-##        for x in range(timesteps):
-##            lablab.append([lab, 1 - lab])
-###        print(lablab)
-##        lablab = np.array(lablab, dtype=np.float32)
-##        datata.append(np.array(val[:timesteps], dtype=np.float32).reshape(timesteps,1))
-##        labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
-#        
-#        # See how many chunks of size <timesteps> can be extracted from each data (working)
-##        for i in range(len(val)//timesteps):
-##            lablab = []
-##            start = i * timesteps
-##            end = start + timesteps
-##            for x in range(timesteps):
-##                lablab.append([lab, 1 - lab])
-##                
-##            lablab = np.array(lablab, dtype=np.float32)
-##            datata.append(np.array(val[start:end], dtype=np.float32).reshape(timesteps,1))
-##            labels.append(np.array(lablab, dtype=np.float32).reshape(timesteps,2))
-#        for i in range(len(val)//timesteps):
-#            lablab = []
-#            start = i * timesteps
-#            end = start + timesteps
-#            for x in range(timesteps):
-#                lablab.append([lab, 1 - lab])
-#                
-#            lablab = np.array(lablab, dtype=np.float32)
-#            data_to_store = np.array(val[start:end], dtype=np.float32).reshape(timesteps,1)
-#            label_to_store = np.array(lablab, dtype=np.float32).reshape(timesteps,2)
-#            le_bin.append({'data': data_to_store, 
-#                 'label': label_to_store})
-#    
-#    # Now pick the data so the number of data points for each class is balanced
-#    dat_dat = min(class0, class1)
-#    for fdata in [datata0, datata1]:
-#        pick = np.random.choice(range(dat_dat), size=dat_dat, replace=False)
-#        datata.extend([k['data'] for k in fdata])
-#        labels.extend([k['label'] for k in fdata])
-#    # Shuffle the data
-#    total_data = 0
-#    if len(datata) == len(labels):
-#        total_data = len(datata)
-#        shuffle = np.random.choice(range(total_data), size=total_data, replace=False)
-#        datata = [datata[i] for i in shuffle]
-#        labels = [labels[i] for i in shuffle]
-#    else:
-#        raise ValueError('datata =/= labels')
-#    
-#    print('Collected {} data and {} labels. Skipped {}.'.format(len(datata), len(labels), len(skipped)))
-#    return datata, labels, skipped
-
 
 # =============================================================================
 # Split to train, validation, and test data
@@ -485,9 +422,9 @@ def get_labels2(some_data):
 #validate_x, validate_y, validate_skipped = get_labels(validation_data)
 #test_x, test_y, test_skipped = get_labels(test_data)
 
-train_x, train_y = get_labels2(train_data)
-validate_x, validate_y = get_labels2(validation_data)
-test_x, test_y = get_labels2(test_data)
+train_x, train_y, train_samples = get_labels2(train_data)
+validate_x, validate_y, validate_samples = get_labels2(validation_data)
+test_x, test_y, test_samples = get_labels2(test_data)
 
 # Just get batch-divisable data, and convert to numpy arrays
 t_size = len(train_x)//batch_size * batch_size
@@ -500,8 +437,10 @@ ts_size = len(test_x)//batch_size * batch_size
 test_x = np.array([s.reshape(s.shape[0],1) for s in test_x[:ts_size]], dtype=np.float32)
 test_y = np.array([s.reshape(s.shape[0],2) for s in test_y[:ts_size]], dtype=np.float32)
 
-train_x, train_y = shuffle(train_x, train_y, size=t_size)
-validate_x, validate_y = shuffle(validate_x, validate_y, size=v_size)
+#train_x, train_y = shuffle(train_x, train_y, size=t_size)
+#validate_x, validate_y = shuffle(validate_x, validate_y, size=v_size)
+train_x, train_y, train_samplesx = shuffle(train_x, train_y, samples=train_samples, size=t_size)
+validate_x, validate_y, v_samples = shuffle(validate_x, validate_y, samples=validate_samples, size=v_size)
 
 # =============================================================================
 # Tensorboard - Ref: http://fizzylogic.nl/2017/05/08/monitor-progress-of-your-keras-based-neural-network-using-tensorboard/
@@ -521,24 +460,28 @@ model.fit(train_x, train_y,
 #predictions = model.predict_on_batch(test_x[:batch_size]) # old
 # Shuffle test data
 test_shuffle = np.random.choice(range(len(test_x)), size=batch_size, replace=False)
-test_x_shuffled = np.array([test_x[i] for i in test_shuffle], dtype=np.float32)
+test_x_shuffled = np.array([test_x[i].reshape(50,1) for i in test_shuffle], dtype=np.float32)
 test_y_shuffled = np.array([test_y[i] for i in test_shuffle], dtype=np.float32)
+test_samples_shuffled = [test_samples[i] for i in test_shuffle]
+test_x_shuffled, test_y_shuffled, test_samples_shuffled = shuffle(test_x, test_y, test_samples, size=batch_size)
+
+#test_x_shuffled, test_y_shuffled = shuffle(test_x, test_y, size=batch_size)
 
 predictions = model.predict_on_batch(test_x_shuffled)
 
 
 gt = get_target_index
-print("sample\tactual\t\tpredicted\t\t\tprediction error (over correct class)")
+print("sample\t\t\t\t\tactual\t\tpredicted\t\tprediction error (over correct class)")
 true_positive = 0
 false_positive = 0
 true_negative= 0
 false_negative = 0
 
 for k in range(len(predictions)):
-    p = predictions[k]
+    prediction = predictions[k][-1] # Only choose the last prediction
     actual = gt(test_y_shuffled[k][-1])
     
-    error = calculate_error(actual, p[-1])
+    error = calculate_error(actual, prediction)
     if error > 0.4:
         error = '**' + str(error) + '**'
         if actual == 0:
@@ -550,7 +493,8 @@ for k in range(len(predictions)):
             true_negative += 1
         else:
             true_positive += 1
-    print("%s\t%s\t%s  \t%s" % (k, actual, p[-1], error))
+    sample_name = test_samples_shuffled[k]
+    print("%s\t%s\t%s  \t%s" % (sample_name[:15] + '...' + sample_name[-15:], actual, prediction, error))
 print("\n================\n")
 print("Confusion matrix\n")
 print("================\n")
@@ -563,3 +507,12 @@ recall = true_positive / (true_positive + false_negative)
 
 print("Precision: {}".format(precision))
 print("Recall: {}".format(recall))
+
+# =============================================================================
+# Model saving and loading - Ref; https://keras.io/models/about-keras-models/
+# =============================================================================
+from keras.models import model_from_json, model_from_yaml
+json_string = model.to_json() # only save architecture
+model.save_weights('models/gru_64_128_256_v4_weights.h5') # saves weights
+model.save('models/gru_64_128_256_v4.h5')
+
