@@ -366,10 +366,10 @@ hidden_size512 = 512
 
 hidden_size = hidden_size128
 data_dim = 1
-epochs = 10
+epochs = 20
 
 # =============================================================================
-# Model
+# Model (GRU)
 # =============================================================================
 model = None
 model = Sequential()
@@ -377,6 +377,21 @@ model.add(GRU(hidden_size64, return_sequences=True, stateful=True,
                batch_input_shape=(batch_size, timesteps, data_dim)))
 model.add(GRU(hidden_size128, return_sequences=True, stateful=True))
 model.add(GRU(hidden_size256, return_sequences=True, stateful=True))
+model.add(Dense(num_classes, activation='softmax'))
+
+model.compile(loss='categorical_crossentropy',
+              optimizer='rmsprop',
+              metrics=['accuracy'])
+
+# =============================================================================
+# Model (LSTM)
+# =============================================================================
+model = None
+model = Sequential()
+model.add(LSTM(hidden_size64, return_sequences=True, stateful=True,
+               batch_input_shape=(batch_size, timesteps, data_dim)))
+model.add(LSTM(hidden_size128, return_sequences=True, stateful=True))
+model.add(LSTM(hidden_size256, return_sequences=True, stateful=True))
 model.add(Dense(num_classes, activation='softmax'))
 
 model.compile(loss='categorical_crossentropy',
@@ -449,11 +464,16 @@ tensorboard = TensorBoard(log_dir="logs/{}".format(datetime.datetime.utcnow().st
 # =============================================================================
 # Train!
 # =============================================================================
+start = time.time()
+
 print(model.summary())
 model.fit(train_x, train_y,
           batch_size=batch_size, epochs=epochs, shuffle=True,
           validation_data=(validate_x, validate_y), callbacks=[tensorboard])
 
+end = time.time()
+elapsed = end-start
+print('Training Elapsed: {}'.format(str(timedelta(seconds=elapsed))))
 # =============================================================================
 # Test!
 # =============================================================================
