@@ -45,11 +45,13 @@ def test_rn(fan_in, fan_out, plot=True):
     rn = RN(fan_in, fan_out)
     inut = []
 #    np_range = np.arange(-6.0, 6.0, 0.1)
-    np_range = np.linspace(0, 4*np.pi, 100)
-    phase = 0.45
+    np_range = np.linspace(-12.0, 4*np.pi, 1000)
+    phase = 0.0
     for i in range(fan_in):
-        inut.append(np.sin(np_range + phase))
-        phase = np.random.random()
+        f = np.random.choice([np.sin, np.cos])
+        inut.append(f(np_range + phase))
+#        nx = np.linspace(0, (r+i+1)*np.pi, 1000)
+        phase += 0.002
     assert len(inut) == fan_in
     inut = np.array(inut, dtype=np.float64)
     inut = np.reshape(inut, (inut.shape[1], inut.shape[0]))
@@ -58,6 +60,13 @@ def test_rn(fan_in, fan_out, plot=True):
     original_input = np.reshape(original_input, (original_input.shape[0],1))
     
     if plot:
-        out = np.hstack((out, inut))
-        plt.plot(np_range, out)
+#        out = np.hstack((out, inut))
+        for t, color in enumerate(['r--', 'b--', 'y--','m--', 'g--','k--'], start=0):
+            if t >= inut.shape[1]:
+                break
+            plt.plot(np_range, inut[:,t], color)
+        for i, color in enumerate(['r-', 'b-', 'y-','m-', 'g-','k-'], start=0):
+            if i >= out.shape[1]:
+                break
+            plt.plot(np_range, out[:,i], color)
     return out
