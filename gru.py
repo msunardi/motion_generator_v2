@@ -34,7 +34,9 @@ class RN(object):
             
     # Source: https://gist.github.com/jovianlin/805189d4b19332f8b8a79bbd07e3f598
     def sigmoid(self, x, derivative=False):
-        return x*(1-x) if derivative else 1/(1+np.exp(-x)+0.0001)
+        
+        return x*(1-x) if derivative else 1/(1+np.exp(-x)+(np.random.normal(0,0.5)*0.01))
+    
 #        f = lambda z: 1/(1+np.exp(-z))
 #        if derivative:
 #            f =lambda z: z*(1-z)
@@ -71,7 +73,7 @@ def test_rn(fan_in, fan_out, plot=True):
             plt.plot(np_range, out[:,i], color)
     return out
 
-def test_layered(fan_in, fan_out, hidden=[], plot=True):
+def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
     def get_layers(fan_in, fan_out, hidden=[]):
         rn = []
         
@@ -96,27 +98,58 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True):
         else:
             final_out = _out
         return final_out, activations_out
+    
+    pi_multiplier = 4
+    if 'pi_multiplier' in kwargs:
+        pi_multiplier = kwargs['pi_multiplier']
+        print("Setting pi_multiplier to: {}".format(pi_multiplier))
         
-    if hidden:
+    n_points = 1000
+    if 'n_points' in kwargs:
+        n_points = kwargs['n_points']
+        print("n_points: {}".format(n_points))
+    
+    f_choice = [np.sin, np.cos]
+    if 'f_choice' in kwargs:
+        assert type(kwargs['f_choice']) == list
+        f_choice.extend(kwargs['f_choice'])
+        _ff = set(f_choice)
+        f_choice = list(_ff)
+        print("f_choices: {}".format(f_choice))
+        
+    if len(hidden) > 0:
         layers = get_layers(fan_in, fan_out, hidden)
         rn = []
         for layer in layers:
             rn.append(RN(layer[0],layer[1]))
             
-        # Prepare input
+        # Prepare input (this is the same used in test_rn)
         inut = []
-        np_range = np.linspace(-12.0, 4*np.pi, 1000)
+        np_range = np.linspace(0, pi_multiplier*np.pi, n_points)
         phase = 0.0
         for i in range(fan_in):
-            f = np.random.choice([np.sin, np.cos])
+            f = np.random.choice(f_choice)
             inut.append(f(np_range + phase))
             phase += 0.002
         assert len(inut) == fan_in
         inut = np.array(inut, dtype=np.float64)
         inut = np.reshape(inut, (inut.shape[1], inut.shape[0]))
         x_in = inut
-        return get_activations(rn, x_in)
         
+        out, activations = get_activations(rn, x_in)
+
+        if plot:
+    
+            for t, color in enumerate(['r--', 'b--', 'y--','m--', 'g--','k--'], start=0):
+                if t >= inut.shape[1]:
+                    break
+                plt.plot(np_range, inut[:,t], color)
+            for i, color in enumerate(['r-', 'b-', 'y-','m-', 'g-','k-'], start=0):
+                if i >= out.shape[1]:
+                    break
+                plt.plot(np_range, out[:,i], color)
+        
+        return out, activations
         
     else:
         test_rn(fan_in, fan_out)
