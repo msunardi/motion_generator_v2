@@ -70,3 +70,54 @@ def test_rn(fan_in, fan_out, plot=True):
                 break
             plt.plot(np_range, out[:,i], color)
     return out
+
+def test_layered(fan_in, fan_out, hidden=[], plot=True):
+    def get_layers(fan_in, fan_out, hidden=[]):
+        rn = []
+        
+        for i in range(len(hidden)+1):
+            if i == 0:
+                rn.append((fan_in, hidden[0]))
+            elif i == len(hidden):
+                rn.append((hidden[i-1], fan_out))
+            else:
+                rn.append((hidden[i-1], hidden[i]))
+        return rn
+    
+    def get_activations(rn_layers, x_in):
+        rx_in = x_in
+        
+        activations_out = []
+        final_out = None
+        for rn in rn_layers:
+            _out = np.array([rn.activate(i) for i in rx_in])
+            activations_out.append(_out)
+            rx_in = _out
+        else:
+            final_out = _out
+        return final_out, activations_out
+        
+    if hidden:
+        layers = get_layers(fan_in, fan_out, hidden)
+        rn = []
+        for layer in layers:
+            rn.append(RN(layer[0],layer[1]))
+            
+        # Prepare input
+        inut = []
+        np_range = np.linspace(-12.0, 4*np.pi, 1000)
+        phase = 0.0
+        for i in range(fan_in):
+            f = np.random.choice([np.sin, np.cos])
+            inut.append(f(np_range + phase))
+            phase += 0.002
+        assert len(inut) == fan_in
+        inut = np.array(inut, dtype=np.float64)
+        inut = np.reshape(inut, (inut.shape[1], inut.shape[0]))
+        x_in = inut
+        return get_activations(rn, x_in)
+        
+        
+    else:
+        test_rn(fan_in, fan_out)
+        
