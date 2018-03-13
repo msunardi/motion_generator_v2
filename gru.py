@@ -117,6 +117,11 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
         f_choice = list(_ff)
         print("f_choices: {}".format(f_choice))
         
+    in_freq = 1.0
+    if 'in_freq' in kwargs:
+        in_freq = kwargs['in_freq']
+        print("in_freq: {}".format(in_freq))
+
     if len(hidden) > 0:
         layers = get_layers(fan_in, fan_out, hidden)
         rn = []
@@ -130,7 +135,7 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
         for i in range(fan_in):
             f = np.random.choice(f_choice)
             print(f)
-            inut.append(f(np_range - phase))
+            inut.append(f(in_freq*np_range - phase))
             phase += 0.5
         assert len(inut) == fan_in
         inut = np.array(inut, dtype=np.float64)
