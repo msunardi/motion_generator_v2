@@ -56,7 +56,7 @@ def test_rn(fan_in, fan_out, plot=True):
         phase += 0.002
     assert len(inut) == fan_in
     inut = np.array(inut, dtype=np.float64)
-    inut = np.reshape(inut, (inut.shape[1], inut.shape[0]))
+    inut = inut.T
     out = np.array([rn.activate(i) for i in inut])
     original_input = np.sin(np_range + phase)
     original_input = np.reshape(original_input, (original_input.shape[0],1))
@@ -92,7 +92,7 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
         activations_out = []
         final_out = None
         for rn in rn_layers:
-            _out = np.array([rn.activate(i) for i in rx_in])
+            _out = np.array([rn.activate(i + np.random.uniform(0,0.1)) for i in rx_in])
             activations_out.append(_out)
             rx_in = _out
         else:
@@ -129,11 +129,12 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
         phase = 0.0
         for i in range(fan_in):
             f = np.random.choice(f_choice)
-            inut.append(f(np_range + phase))
-            phase += 0.002
+            print(f)
+            inut.append(f(np_range - phase))
+            phase += 0.5
         assert len(inut) == fan_in
         inut = np.array(inut, dtype=np.float64)
-        inut = np.reshape(inut, (inut.shape[1], inut.shape[0]))
+        inut = inut.T
         x_in = inut
         
         out, activations = get_activations(rn, x_in)
@@ -141,16 +142,16 @@ def test_layered(fan_in, fan_out, hidden=[], plot=True, **kwargs):
         if plot:
     
             for t, color in enumerate(['r--', 'b--', 'y--','m--', 'g--','k--'], start=0):
-                if t >= inut.shape[1]:
+                if t == inut.shape[1]:
                     break
                 plt.plot(np_range, inut[:,t], color)
             for i, color in enumerate(['r-', 'b-', 'y-','m-', 'g-','k-'], start=0):
-                if i >= out.shape[1]:
+                if i == out.shape[1]:
                     break
                 plt.plot(np_range, out[:,i], color)
         
         return out, activations
         
     else:
-        test_rn(fan_in, fan_out)
+        return test_rn(fan_in, fan_out)
         
