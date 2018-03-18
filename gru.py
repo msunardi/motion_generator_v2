@@ -13,7 +13,7 @@ class RN(object):
         self.Whx = self.random(fan_in, fan_out)
         self.bh = self.random()
         self.Wzx = self.random(fan_in, fan_out)
-        self.Wzh = self.random(fan_out, fan_out)
+        self.Wzh = self.random(fan_out, fan_out, mode=0)
         self.bz = self.random()
         self.ht_1 = np.zeros((fan_out,))
         
